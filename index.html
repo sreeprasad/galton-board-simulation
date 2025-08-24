@@ -174,6 +174,7 @@
             <button id="dropOne">Drop 1 Ball</button>
             <button id="dropTen">Drop 10 Balls</button>
             <button id="dropHundred">Drop 100 Balls</button>
+            <button id="dropThousand">Drop 1000 Balls</button>
             <button id="autoPlay">Auto Play</button>
             <button id="reset">Reset</button>
             <select id="speedControl">
@@ -211,9 +212,9 @@
         const ballRadius = 6;
         const binWidth = 50;
         const pegSpacing = 60;
-        const gravity = 0.3;
-        const bounceDamping = 0.7;
-        const horizontalNoise = 0.5;
+        const gravity = 0.8;
+        const bounceDamping = 0.55;
+        const horizontalNoise = 0.15;
         
         let balls = [];
         let binCounts = new Array(pegRows + 1).fill(0);
@@ -352,10 +353,11 @@
                         this.x = targetX;
                         this.y = targetY;
                         
-                        // Bounce
+                        // Bounce with more randomness for left/right decision
                         const speed = Math.sqrt(this.vx * this.vx + this.vy * this.vy);
-                        this.vx = Math.cos(angle) * speed * bounceDamping;
-                        this.vy = Math.sin(angle) * speed * bounceDamping;
+                        const bounceDirection = Math.random() < 0.5 ? -1 : 1;
+                        this.vx = bounceDirection * speed * 0.3 + (Math.random() - 0.5) * 0.5;
+                        this.vy = Math.abs(this.vy) * bounceDamping;
                     }
                 }
                 
@@ -386,13 +388,13 @@
             for (let i = 0; i < count; i++) {
                 setTimeout(() => {
                     balls.push(new Ball());
-                }, i * 100);
+                }, i * Math.min(100, 5000/count));
             }
         }
         
         function updateHistogram() {
             const maxCount = Math.max(...binCounts, 1);
-            const barHeight = 80;
+            const barHeight = 120;
             
             const bars = histogramGroup.selectAll('.histogram-bar')
                 .data(binCounts);
@@ -408,6 +410,23 @@
                 .attr('width', binWidth - 10)
                 .attr('height', d => (d / maxCount) * barHeight)
                 .attr('rx', 3);
+            
+            // Add count labels on bars
+            const labels = histogramGroup.selectAll('.bar-count')
+                .data(binCounts);
+            
+            labels.enter()
+                .append('text')
+                .attr('class', 'bar-count')
+                .style('text-anchor', 'middle')
+                .style('font-size', '12px')
+                .style('fill', '#4a5568')
+                .merge(labels)
+                .transition()
+                .duration(300)
+                .attr('x', (d, i) => binStartX + i * binWidth + binWidth/2)
+                .attr('y', d => d > 0 ? binY - (d / maxCount) * barHeight - 5 : binY - 5)
+                .text(d => d > 0 ? d : '');
         }
         
         function updateStats() {
@@ -457,6 +476,7 @@
         document.getElementById('dropOne').addEventListener('click', () => dropBalls(1));
         document.getElementById('dropTen').addEventListener('click', () => dropBalls(10));
         document.getElementById('dropHundred').addEventListener('click', () => dropBalls(100));
+        document.getElementById('dropThousand').addEventListener('click', () => dropBalls(1000));
         
         document.getElementById('autoPlay').addEventListener('click', function() {
             isAutoPlaying = !isAutoPlaying;
