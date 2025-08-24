@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Galton Board Simulation</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .container {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            padding: 30px;
+            max-width: 900px;
+            width: 100%;
+        }
+
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 2.5em;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 1.1em;
+        }
+
+        .controls {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 25px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 600;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.5);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .stats {
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            margin-top: 20px;
+            flex-wrap: wrap;
+        }
+
+        .stat {
+            text-align: center;
+            padding: 10px 20px;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            border-radius: 10px;
+        }
+
+        .stat-label {
+            font-size: 0.9em;
+            color: #666;
+            margin-bottom: 5px;
+        }
+
+        .stat-value {
+            font-size: 1.5em;
+            font-weight: bold;
+            color: #333;
+        }
+
+        #board {
+            display: block;
+            margin: 0 auto;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .peg {
+            fill: #4a5568;
+        }
+
+        .ball {
+            filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+        }
+
+        .bin {
+            fill: #e2e8f0;
+            stroke: #718096;
+            stroke-width: 2;
+        }
+
+        .bin-label {
+            fill: #4a5568;
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .histogram-bar {
+            fill: url(#barGradient);
+            opacity: 0.8;
+            transition: all 0.3s ease;
+        }
+
+        .histogram-bar:hover {
+            opacity: 1;
+        }
+
+        select {
+            padding: 10px 15px;
+            border-radius: 25px;
+            border: 2px solid #667eea;
+            background: white;
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        select:hover {
+            border-color: #764ba2;
+        }
+
+        select:focus {
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Galton Board Simulation</h1>
+        <p class="subtitle">Watch the beauty of the normal distribution emerge from chaos</p>
+        
+        <div class="controls">
+            <button id="dropOne">Drop 1 Ball</button>
+            <button id="dropTen">Drop 10 Balls</button>
+            <button id="dropHundred">Drop 100 Balls</button>
+            <button id="autoPlay">Auto Play</button>
+            <button id="reset">Reset</button>
+            <select id="speedControl">
+                <option value="1">Normal Speed</option>
+                <option value="2">Fast (2x)</option>
+                <option value="4">Very Fast (4x)</option>
+                <option value="0.5">Slow (0.5x)</option>
+            </select>
+        </div>
+        
+        <svg id="board"></svg>
+        
+        <div class="stats">
+            <div class="stat">
+                <div class="stat-label">Total Balls</div>
+                <div class="stat-value" id="totalBalls">0</div>
+            </div>
+            <div class="stat">
+                <div class="stat-label">Mean Position</div>
+                <div class="stat-value" id="meanPosition">-</div>
+            </div>
+            <div class="stat">
+                <div class="stat-label">Standard Deviation</div>
+                <div class="stat-value" id="stdDev">-</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Configuration
+        const width = 800;
+        const height = 600;
+        const pegRows = 12;
+        const pegRadius = 4;
+        const ballRadius = 6;
+        const binWidth = 50;
+        const pegSpacing = 60;
+        const gravity = 0.3;
+        const bounceDamping = 0.7;
+        const horizontalNoise = 0.5;
+        
+        let balls = [];
+        let binCounts = new Array(pegRows + 1).fill(0);
+        let isAutoPlaying = false;
+        let animationSpeed = 1;
+        let autoPlayInterval;
+        
+        // Create SVG
+        const svg = d3.select('#board')
+            .attr('width', width)
+            .attr('height', height);
+        
+        // Add gradient definitions
+        const defs = svg.append('defs');
+        
+        const ballGradient = defs.append('radialGradient')
+            .attr('id', 'ballGradient');
+        ballGradient.append('stop')
+            .attr('offset', '0%')
+            .attr('stop-color', '#fbbf24');
+        ballGradient.append('stop')
+            .attr('offset', '100%')
+            .attr('stop-color', '#f59e0b');
+        
+        const barGradient = defs.append('linearGradient')
+            .attr('id', 'barGradient')
+            .attr('x1', '0%')
+            .attr('y1', '0%')
+            .attr('x2', '0%')
+            .attr('y2', '100%');
+        barGradient.append('stop')
+            .attr('offset', '0%')
+            .attr('stop-color', '#667eea');
+        barGradient.append('stop')
+            .attr('offset', '100%')
+            .attr('stop-color', '#764ba2');
+        
+        // Create groups
+        const pegGroup = svg.append('g').attr('class', 'pegs');
+        const binGroup = svg.append('g').attr('class', 'bins');
+        const histogramGroup = svg.append('g').attr('class', 'histogram');
+        const ballGroup = svg.append('g').attr('class', 'balls');
+        
+        // Calculate peg positions
+        const pegs = [];
+        for (let row = 0; row < pegRows; row++) {
+            const pegCount = row + 1;
+            const rowY = 80 + row * 35;
+            const rowWidth = (pegCount - 1) * pegSpacing;
+            const startX = width / 2 - rowWidth / 2;
+            
+            for (let col = 0; col < pegCount; col++) {
+                pegs.push({
+                    x: startX + col * pegSpacing,
+                    y: rowY,
+                    row: row,
+                    col: col
+                });
+            }
+        }
+        
+        // Draw pegs
+        pegGroup.selectAll('.peg')
+            .data(pegs)
+            .enter()
+            .append('circle')
+            .attr('class', 'peg')
+            .attr('cx', d => d.x)
+            .attr('cy', d => d.y)
+            .attr('r', pegRadius);
+        
+        // Draw bins
+        const binY = height - 100;
+        const totalBinWidth = (pegRows + 1) * binWidth;
+        const binStartX = width / 2 - totalBinWidth / 2;
+        
+        for (let i = 0; i <= pegRows; i++) {
+            binGroup.append('rect')
+                .attr('class', 'bin')
+                .attr('x', binStartX + i * binWidth)
+                .attr('y', binY)
+                .attr('width', binWidth)
+                .attr('height', 80)
+                .attr('rx', 5);
+            
+            binGroup.append('text')
+                .attr('class', 'bin-label')
+                .attr('x', binStartX + i * binWidth + binWidth / 2)
+                .attr('y', binY + 50)
+                .attr('text-anchor', 'middle')
+                .text(i);
+        }
+        
+        class Ball {
+            constructor() {
+                this.x = width / 2 + (Math.random() - 0.5) * 20;
+                this.y = 20;
+                this.vx = 0;
+                this.vy = 0;
+                this.finished = false;
+                this.binIndex = -1;
+                
+                this.element = ballGroup.append('circle')
+                    .attr('class', 'ball')
+                    .attr('cx', this.x)
+                    .attr('cy', this.y)
+                    .attr('r', ballRadius)
+                    .attr('fill', 'url(#ballGradient)');
+            }
+            
+            update() {
+                if (this.finished) return;
+                
+                // Apply gravity
+                this.vy += gravity * animationSpeed;
+                
+                // Apply small random horizontal force
+                this.vx += (Math.random() - 0.5) * horizontalNoise * animationSpeed;
+                
+                // Update position
+                this.x += this.vx * animationSpeed;
+                this.y += this.vy * animationSpeed;
+                
+                // Check collision with pegs
+                for (let peg of pegs) {
+                    const dx = this.x - peg.x;
+                    const dy = this.y - peg.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    
+                    if (distance < ballRadius + pegRadius) {
+                        // Collision detected
+                        const angle = Math.atan2(dy, dx);
+                        const targetX = peg.x + Math.cos(angle) * (ballRadius + pegRadius);
+                        const targetY = peg.y + Math.sin(angle) * (ballRadius + pegRadius);
+                        
+                        this.x = targetX;
+                        this.y = targetY;
+                        
+                        // Bounce
+                        const speed = Math.sqrt(this.vx * this.vx + this.vy * this.vy);
+                        this.vx = Math.cos(angle) * speed * bounceDamping;
+                        this.vy = Math.sin(angle) * speed * bounceDamping;
+                    }
+                }
+                
+                // Check if ball reached bins
+                if (this.y >= binY - ballRadius) {
+                    this.finished = true;
+                    this.binIndex = Math.floor((this.x - binStartX) / binWidth);
+                    this.binIndex = Math.max(0, Math.min(pegRows, this.binIndex));
+                    binCounts[this.binIndex]++;
+                    updateHistogram();
+                    updateStats();
+                    
+                    // Fade out ball
+                    this.element.transition()
+                        .duration(500)
+                        .attr('opacity', 0)
+                        .remove();
+                }
+                
+                // Update visual position
+                this.element
+                    .attr('cx', this.x)
+                    .attr('cy', this.y);
+            }
+        }
+        
+        function dropBalls(count) {
+            for (let i = 0; i < count; i++) {
+                setTimeout(() => {
+                    balls.push(new Ball());
+                }, i * 100);
+            }
+        }
+        
+        function updateHistogram() {
+            const maxCount = Math.max(...binCounts, 1);
+            const barHeight = 80;
+            
+            const bars = histogramGroup.selectAll('.histogram-bar')
+                .data(binCounts);
+            
+            bars.enter()
+                .append('rect')
+                .attr('class', 'histogram-bar')
+                .merge(bars)
+                .transition()
+                .duration(300)
+                .attr('x', (d, i) => binStartX + i * binWidth + 5)
+                .attr('y', d => binY - (d / maxCount) * barHeight)
+                .attr('width', binWidth - 10)
+                .attr('height', d => (d / maxCount) * barHeight)
+                .attr('rx', 3);
+        }
+        
+        function updateStats() {
+            const totalBalls = binCounts.reduce((a, b) => a + b, 0);
+            document.getElementById('totalBalls').textContent = totalBalls;
+            
+            if (totalBalls > 0) {
+                // Calculate mean
+                let sum = 0;
+                for (let i = 0; i < binCounts.length; i++) {
+                    sum += i * binCounts[i];
+                }
+                const mean = sum / totalBalls;
+                document.getElementById('meanPosition').textContent = mean.toFixed(2);
+                
+                // Calculate standard deviation
+                let varianceSum = 0;
+                for (let i = 0; i < binCounts.length; i++) {
+                    varianceSum += binCounts[i] * Math.pow(i - mean, 2);
+                }
+                const stdDev = Math.sqrt(varianceSum / totalBalls);
+                document.getElementById('stdDev').textContent = stdDev.toFixed(2);
+            }
+        }
+        
+        function reset() {
+            balls = [];
+            binCounts = new Array(pegRows + 1).fill(0);
+            ballGroup.selectAll('.ball').remove();
+            histogramGroup.selectAll('.histogram-bar').remove();
+            document.getElementById('totalBalls').textContent = '0';
+            document.getElementById('meanPosition').textContent = '-';
+            document.getElementById('stdDev').textContent = '-';
+        }
+        
+        // Animation loop
+        function animate() {
+            balls = balls.filter(ball => {
+                ball.update();
+                return !ball.finished;
+            });
+            requestAnimationFrame(animate);
+        }
+        animate();
+        
+        // Event listeners
+        document.getElementById('dropOne').addEventListener('click', () => dropBalls(1));
+        document.getElementById('dropTen').addEventListener('click', () => dropBalls(10));
+        document.getElementById('dropHundred').addEventListener('click', () => dropBalls(100));
+        
+        document.getElementById('autoPlay').addEventListener('click', function() {
+            isAutoPlaying = !isAutoPlaying;
+            this.textContent = isAutoPlaying ? 'Stop Auto' : 'Auto Play';
+            
+            if (isAutoPlaying) {
+                autoPlayInterval = setInterval(() => {
+                    dropBalls(1);
+                }, 200);
+            } else {
+                clearInterval(autoPlayInterval);
+            }
+        });
+        
+        document.getElementById('reset').addEventListener('click', () => {
+            if (isAutoPlaying) {
+                document.getElementById('autoPlay').click();
+            }
+            reset();
+        });
+        
+        document.getElementById('speedControl').addEventListener('change', function() {
+            animationSpeed = parseFloat(this.value);
+        });
+    </script>
+</body>
+</html>
